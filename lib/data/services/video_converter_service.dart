@@ -3,11 +3,30 @@ import 'dart:io';
 import 'dart:async';
 import '../models/video_file.dart';
 import 'conversion_log_service.dart';
+import 'ffmpeg_video_converter_service.dart';
 
 class VideoConverterService {
   Function(double)? onProgress;
+  final FFmpegVideoConverterService _ffmpegService = FFmpegVideoConverterService();
   
   Future<String> convertVideo(ConversionTask task) async {
+    // Try FFmpeg first for better format support
+    try {
+      if (await _ffmpegService.isFFmpegAvailable()) {
+        print('Using FFmpeg for video conversion');
+        _ffmpegService.onProgress = onProgress;
+        return await _ffmpegService.convertVideo(task);
+      }
+    } catch (e) {
+      print('FFmpeg conversion failed, falling back to video_compress: $e');
+    }
+    
+    // Fallback to video_compress for basic MP4 conversion
+    print('Using video_compress for video conversion');
+    return await _convertWithVideoCompress(task);
+  }
+  
+  Future<String> _convertWithVideoCompress(ConversionTask task) async {
     // Validate input file exists
     final inputFile = File(task.inputFile.path);
     if (!await inputFile.exists()) {
@@ -199,10 +218,25 @@ class VideoConverterService {
   
   Future<bool> isVideoCompressionSupported() async {
     try {
-      // video_compress is always available on Android
+      // Check if FFmpeg is available first
+      if (await _ffmpegService.isFFmpegAvailable()) {
+        return true;
+      }
+      // Fallback to video_compress
       return true;
     } catch (e) {
       return false;
     }
+  }
+  
+  Future<Map<String, dynamic>> getVideoInfo(String videoPath) async {
+    try {
+      if (await _ffmpegService.isFFmpegAvailable()) {
+        return await _ffmpegService.getVideoInfo(videoPath);
+      }
+    } catch (e) {
+      print('Failed to get video info via FFmpeg: $e');
+    }
+    return {};
   }
 }

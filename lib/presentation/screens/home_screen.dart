@@ -318,12 +318,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _copyToClipboard(ConversionLogEntry entry) async {
     try {
-      await Clipboard.setData(ClipboardData(text: entry.convertedPath));
+      // Copy file to Downloads folder for easy access
+      final sourceFile = File(entry.convertedPath);
+      if (!await sourceFile.exists()) {
+        throw Exception('Source file not found');
+      }
+      
+      // Create a copy in Downloads with a unique name
+      final downloadsDir = '/storage/emulated/0/Download';
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = entry.fileName;
+      final baseName = fileName.substring(0, fileName.lastIndexOf('.'));
+      final extension = fileName.substring(fileName.lastIndexOf('.'));
+      final copyPath = '$downloadsDir/${baseName}_copy_$timestamp$extension';
+      
+      await sourceFile.copy(copyPath);
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('File path copied to clipboard'),
+            content: Text('File copied to Downloads folder'),
             backgroundColor: Theme.of(context).colorScheme.primary,
+            action: SnackBarAction(
+              label: 'Open',
+              onPressed: () async {
+                try {
+                  const platform = MethodChannel('video_converter/folder_opener');
+                  await platform.invokeMethod('openFolder', {'path': downloadsDir});
+                } catch (e) {
+                  // Fallback: copy path to clipboard
+                  await Clipboard.setData(ClipboardData(text: copyPath));
+                }
+              },
+            ),
           ),
         );
       }
@@ -331,7 +358,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Could not copy to clipboard: $e'),
+            content: Text('Could not copy file: $e'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
