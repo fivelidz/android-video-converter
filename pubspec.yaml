@@ -1,5 +1,5 @@
 name: android_video_converter
-description: A video file converter app for Android
+description: Professional video converter for Android. Convert videos to MP4, WebM, AVI, MOV, and MKV formats with FFmpeg support. Fast, efficient, and user-friendly video conversion tool.
 publish_to: 'none'
 version: 1.0.0+1
 

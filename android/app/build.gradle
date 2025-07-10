@@ -23,7 +23,7 @@ if (flutterVersionName == null) {
 }
 
 android {
-    namespace "com.example.android_video_converter"
+    namespace "com.videoconverter.android"
     compileSdk flutter.compileSdkVersion
     // ndkVersion "28.0.12433566"  // Let Flutter use default
 
@@ -41,7 +41,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.example.android_video_converter"
+        applicationId "com.videoconverter.android"
         minSdkVersion 24
         targetSdkVersion flutter.targetSdkVersion
         versionCode flutterVersionCode.toInteger()
