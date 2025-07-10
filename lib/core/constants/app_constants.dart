@@ -32,7 +32,7 @@ class SwipeActionHelper {
     SwipeAction.none: 'No Action',
     SwipeAction.delete: 'Delete',
     SwipeAction.openDirectory: 'Open Directory',
-    SwipeAction.copyToClipboard: 'Copy to Clipboard',
+    SwipeAction.copyToClipboard: 'Copy to Downloads',
     SwipeAction.moveToDirectory: 'Move to Directory',
   };
 

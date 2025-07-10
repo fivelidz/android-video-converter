@@ -43,3 +43,107 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Gradle files (CRITICAL FOR TEAM DEVELOPMENT)
+**/.gradle/
+**/gradle/wrapper/gradle-wrapper.jar
+**/gradlew
+**/gradlew.bat
+/android/.gradle/
+/android/gradle/
+/android/local.properties
+/android/key.properties
+/android/app/google-services.json
+/android/app/GoogleService-Info.plist
+
+# Gradle cache and build files
+**/.gradle/
+**/build/
+**/*.log
+**/*.lock
+**/*.bin
+**/*.cache
+**/checksums/
+**/executionHistory/
+**/fileHashes/
+**/buildOutputCleanup/
+
+# Generated plugin files
+**/GeneratedPluginRegistrant.java
+**/GeneratedPluginRegistrant.kt
+**/GeneratedPluginRegistrant.m
+**/GeneratedPluginRegistrant.swift
+
+# App-specific generated files
+/lib/generated/
+/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+
+# iOS (if you plan to support iOS later)
+**/ios/Flutter/App.framework
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/ephemeral/
+**/ios/Flutter/app.flx
+**/ios/Flutter/app.zip
+**/ios/Flutter/flutter_assets/
+**/ios/ServiceDefinitions.json
+**/ios/Runner/GeneratedPluginRegistrant.*
+**/ios/.symlinks/
+**/ios/Pods/
+**/ios/Podfile.lock
+**/ios/Runner.xcworkspace/
+
+# User-specific files
+**/.settings/
+**/.metadata
+**/.project
+**/.classpath
+**/bin/
+**/tmp/
+**/*.tmp
+**/*.bak
+**/*.swp
+**/*~.nib
+**/local.properties
+**/.loadpath
+**/.recommenders
+
+# External native build folder generated in Android Studio 2.2 and later
+**/.externalNativeBuild/
+
+# Version control
+**/.svn/
+**/.git/
+**/.hg/
+**/.bzr/
+
+# Mac
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.nfs*
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+# Application-specific ignores
+# Add any app-specific files you don't want to track
+conversion_log.json
+thumbnails/
+*.apk
+*.aab
