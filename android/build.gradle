@@ -17,6 +17,12 @@ allprojects {
         mavenCentral()
         maven { url "https://jitpack.io" }
         maven { url "https://repo.maven.apache.org/maven2" }
+        maven {
+            url "https://github.com/tanersener/ffmpeg-kit/releases/download/v6.0/maven"
+            metadataSources {
+                artifact()
+            }
+        }
     }
 }
 
