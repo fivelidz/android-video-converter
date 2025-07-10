@@ -946,35 +946,45 @@ class _ConverterScreenState extends ConsumerState<ConverterScreen> with WidgetsB
                           ),
                         ),
                         const SizedBox(height: 8),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).brightness == Brightness.dark
-                                ? Colors.grey.shade800
-                                : Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            customOutputDirectory ?? 
-                            (defaultOutputDirectory != null 
-                                ? 'VideoConverter (default)' 
-                                : 'Documents (default)'),
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        ElevatedButton.icon(
-                          onPressed: _pickOutputDirectory,
-                          icon: const Icon(Icons.folder_open),
-                          label: const Text('Choose Directory'),
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 12,
-                            ),
-                            shape: RoundedRectangleBorder(
+                        InkWell(
+                          onTap: _pickOutputDirectory,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.grey.shade800
+                                  : Colors.grey.shade100,
                               borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.folder,
+                                  size: 20,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    customOutputDirectory ?? 
+                                    (defaultOutputDirectory != null 
+                                        ? 'VideoConverter (default)' 
+                                        : 'Documents (default)'),
+                                    style: const TextStyle(fontSize: 14),
+                                  ),
+                                ),
+                                Icon(
+                                  Icons.edit,
+                                  size: 16,
+                                  color: Theme.of(context).colorScheme.primary.withOpacity(0.7),
+                                ),
+                              ],
                             ),
                           ),
                         ),
