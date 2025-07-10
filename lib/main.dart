@@ -6,6 +6,8 @@ import 'dart:io';
 import 'presentation/screens/home_screen.dart';
 import 'presentation/screens/converter_screen.dart';
 import 'presentation/screens/settings_screen.dart';
+import 'presentation/screens/license_screen.dart';
+import 'presentation/screens/privacy_policy_screen.dart';
 import 'data/models/video_file.dart';
 
 final themeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.system);
@@ -175,6 +177,14 @@ final GoRouter _router = GoRouter(
     GoRoute(
       path: '/settings',
       builder: (context, state) => const SettingsScreen(),
+    ),
+    GoRoute(
+      path: '/license',
+      builder: (context, state) => const LicenseScreen(),
+    ),
+    GoRoute(
+      path: '/privacy',
+      builder: (context, state) => const PrivacyPolicyScreen(),
     ),
   ],
 );

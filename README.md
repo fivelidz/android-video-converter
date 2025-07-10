@@ -205,11 +205,54 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Flutter Community**: For the excellent ecosystem and packages
 - **Contributors**: All developers who have contributed to this project
 
+## 🏪 Play Store Distribution
+
+### Pre-Release Checklist
+- ✅ License and Privacy Policy screens added
+- ✅ Release build configuration with ProGuard
+- ✅ App signing configuration for keystore
+- ✅ Android permissions optimized for API 33+
+- ⏳ Screenshots and store assets
+- ⏳ App Bundle (AAB) build testing
+
+### Publishing Steps
+1. **Create keystore for signing**
+   ```bash
+   ./create-keystore.sh
+   ```
+
+2. **Configure signing** (create `android/key.properties`):
+   ```properties
+   storePassword=your_store_password
+   keyPassword=your_key_password
+   keyAlias=android-video-converter
+   storeFile=path/to/your-keystore.jks
+   ```
+
+3. **Build App Bundle for Play Store**
+   ```bash
+   flutter build appbundle --release
+   ```
+
+4. **Test release build**
+   ```bash
+   flutter build apk --release
+   flutter install --release
+   ```
+
+### Store Listing Information
+- **App Name**: Video Converter
+- **Package Name**: `com.videoconverter.android`
+- **Category**: Video Players & Editors
+- **Target Audience**: Everyone
+- **Privacy Policy**: Built-in privacy policy screen compliant with Play Store requirements
+
 ## 📞 Support
 
 For issues, questions, or contributions:
 - **GitHub Issues**: [Report bugs or request features](https://github.com/fivelidz/android-video-converter/issues)
 - **Discussions**: [Join community discussions](https://github.com/fivelidz/android-video-converter/discussions)
+- **Play Store**: Available on Google Play Store (coming soon)
 
 ---
 

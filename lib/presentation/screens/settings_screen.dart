@@ -520,6 +520,51 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: 16),
+            
+            // About Section
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'About',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ListTile(
+                      leading: const Icon(Icons.info_outline),
+                      title: const Text('Version'),
+                      subtitle: const Text('1.0.0'),
+                      trailing: const Icon(Icons.chevron_right),
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.article_outlined),
+                      title: const Text('License'),
+                      subtitle: const Text('MIT License'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () {
+                        context.go('/license');
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.privacy_tip_outlined),
+                      title: const Text('Privacy Policy'),
+                      subtitle: const Text('Your privacy matters'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () {
+                        context.go('/privacy');
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
