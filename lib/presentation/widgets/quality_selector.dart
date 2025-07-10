@@ -30,14 +30,14 @@ class QualitySelector extends StatelessWidget {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: AppConstants.qualityPresets.entries.map((entry) {
+              children: AppConstants.qualityPresets.map((preset) {
                 return ChoiceChip(
                   label: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(entry.key),
+                      Text(preset['name']!),
                       Text(
-                        entry.value,
+                        preset['resolution']!,
                         style: TextStyle(
                           fontSize: 10,
                           color: Theme.of(context).brightness == Brightness.dark
@@ -47,10 +47,10 @@ class QualitySelector extends StatelessWidget {
                       ),
                     ],
                   ),
-                  selected: selectedQuality == entry.key,
+                  selected: selectedQuality == preset['name'],
                   onSelected: (selected) {
                     if (selected) {
-                      onQualityChanged(entry.key);
+                      onQualityChanged(preset['name']!);
                     }
                   },
                 );

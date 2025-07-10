@@ -7,6 +7,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import '../../core/constants/app_constants.dart';
 import '../../data/models/video_file.dart';
+import '../../data/models/conversion_log.dart';
+import '../../data/services/conversion_log_service.dart';
+import '../../data/services/thumbnail_service.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -16,116 +19,96 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  List<VideoFile> defaultDirectoryFiles = [];
+  List<ConversionLogEntry> convertedVideos = [];
   bool isLoading = true;
-  String? defaultDirectory;
   bool isSelectionMode = false;
   Set<int> selectedIndices = {};
+  SwipeAction leftSwipeAction = SwipeAction.openDirectory;
+  SwipeAction rightSwipeAction = SwipeAction.delete;
+  bool useThumbnails = true;
+  Map<String, String?> thumbnailCache = {};
 
   @override
   void initState() {
     super.initState();
-    _loadDefaultDirectoryFiles();
+    _loadConvertedVideos();
+    _loadSwipeActions();
+    _loadDisplaySettings();
   }
 
-  Future<void> _loadDefaultDirectoryFiles() async {
+  Future<void> _loadSwipeActions() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      final leftActionString = prefs.getString('left_swipe_action');
+      if (leftActionString != null) {
+        leftSwipeAction = SwipeActionHelper.actionFromString(leftActionString);
+      }
+      
+      final rightActionString = prefs.getString('right_swipe_action');
+      if (rightActionString != null) {
+        rightSwipeAction = SwipeActionHelper.actionFromString(rightActionString);
+      }
+    });
+  }
+
+  Future<void> _loadDisplaySettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      useThumbnails = prefs.getBool('use_thumbnails') ?? true;
+    });
+  }
+
+  Future<void> _loadConvertedVideos() async {
     setState(() {
       isLoading = true;
     });
 
     try {
-      defaultDirectory = await _getDefaultOutputDirectory();
-      if (defaultDirectory != null) {
-        final files = await _getVideoFilesFromDirectory(defaultDirectory!);
-        setState(() {
-          defaultDirectoryFiles = files;
-          isLoading = false;
-        });
-      } else {
-        setState(() {
-          isLoading = false;
-        });
+      final entries = await ConversionLogService.getAccessibleEntries();
+      setState(() {
+        convertedVideos = entries;
+        isLoading = false;
+      });
+      
+      // Load thumbnails in background if enabled
+      if (useThumbnails) {
+        _loadThumbnails();
       }
     } catch (e) {
       setState(() {
         isLoading = false;
       });
+      print('Error loading converted videos: $e');
     }
   }
 
-  Future<String?> _getDefaultOutputDirectory() async {
-    try {
-      // First try to get user's preferred directory from settings
-      final prefs = await SharedPreferences.getInstance();
-      final userDefaultDir = prefs.getString('default_output_directory');
-      if (userDefaultDir != null && await Directory(userDefaultDir).exists()) {
-        return userDefaultDir;
-      }
+  Future<void> _loadThumbnails() async {
+    for (final entry in convertedVideos) {
+      if (thumbnailCache.containsKey(entry.convertedPath)) continue;
       
-      // Fallback to app's default output directory (same logic as converter)
-      final directoryOptions = [
-        '/storage/emulated/0/Movies/VideoConverter',
-        '/storage/emulated/0/Download/VideoConverter',
-      ];
-      
-      for (String dir in directoryOptions) {
-        if (await Directory(dir).exists()) {
-          return dir;
+      try {
+        // First check if thumbnail already exists
+        String? thumbnailPath = await ThumbnailService.getCachedThumbnail(entry.convertedPath);
+        
+        // If not, generate it
+        thumbnailPath ??= await ThumbnailService.generateThumbnail(entry.convertedPath);
+        
+        if (mounted) {
+          setState(() {
+            thumbnailCache[entry.convertedPath] = thumbnailPath;
+          });
+        }
+      } catch (e) {
+        print('Error loading thumbnail for ${entry.convertedPath}: $e');
+        if (mounted) {
+          setState(() {
+            thumbnailCache[entry.convertedPath] = null;
+          });
         }
       }
-      
-      // If VideoConverter directories don't exist, try creating Movies/VideoConverter
-      final moviesDir = Directory('/storage/emulated/0/Movies/VideoConverter');
-      if (!await moviesDir.exists()) {
-        try {
-          await moviesDir.create(recursive: true);
-          return moviesDir.path;
-        } catch (e) {
-          // Failed to create, continue to fallback
-        }
-      }
-      
-      return null;
-    } catch (e) {
-      return null;
     }
   }
 
-  Future<List<VideoFile>> _getVideoFilesFromDirectory(String directoryPath) async {
-    try {
-      final directory = Directory(directoryPath);
-      final List<FileSystemEntity> entities = await directory.list().toList();
-      
-      List<VideoFile> videoFiles = [];
-      
-      for (var entity in entities) {
-        if (entity is File) {
-          final path = entity.path.toLowerCase();
-          if (path.endsWith('.mp4') || 
-              path.endsWith('.mov') || 
-              path.endsWith('.avi') || 
-              path.endsWith('.mkv') ||
-              path.endsWith('.webm')) {
-            
-            final stat = await entity.stat();
-            videoFiles.add(VideoFile(
-              path: entity.path,
-              name: entity.path.split('/').last,
-              extension: entity.path.split('.').last,
-              size: stat.size,
-              createdAt: stat.modified,
-            ));
-          }
-        }
-      }
-      
-      // Sort by modified date, newest first
-      videoFiles.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return videoFiles.take(10).toList(); // Limit to 10 most recent files
-    } catch (e) {
-      return [];
-    }
-  }
 
   Future<List<String>?> _pickVideoFileNative() async {
     try {
@@ -251,22 +234,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   void _selectAll() {
     setState(() {
-      selectedIndices = Set.from(List.generate(defaultDirectoryFiles.length, (index) => index));
+      selectedIndices = Set.from(List.generate(convertedVideos.length, (index) => index));
     });
   }
 
   void _deleteSelectedFiles() async {
     try {
-      final filesToDelete = selectedIndices.map((index) => defaultDirectoryFiles[index]).toList();
-      for (final file in filesToDelete) {
-        final fileToDelete = File(file.path);
+      final filesToDelete = selectedIndices.map((index) => convertedVideos[index]).toList();
+      for (final entry in filesToDelete) {
+        final fileToDelete = File(entry.convertedPath);
         if (await fileToDelete.exists()) {
           await fileToDelete.delete();
         }
+        // Remove from conversion log
+        await ConversionLogService.removeEntry(entry.id);
       }
       
       // Refresh the list
-      await _loadDefaultDirectoryFiles();
+      await _loadConvertedVideos();
       _exitSelectionMode();
       
       if (mounted) {
@@ -289,13 +274,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  Future<bool> _showDeleteConfirmation(VideoFile file) async {
+  Future<bool> _showDeleteConfirmation(ConversionLogEntry entry) async {
     return await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Delete Video'),
-          content: Text('Are you sure you want to delete "${file.name}"?'),
+          content: Text('Are you sure you want to delete "${entry.fileName}"?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -314,9 +299,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ) ?? false;
   }
 
-  Future<void> _openFileLocation(VideoFile file) async {
+  Future<void> _openFileLocation(ConversionLogEntry entry) async {
     try {
-      final directory = File(file.path).parent.path;
+      final directory = File(entry.convertedPath).parent.path;
       const platform = MethodChannel('video_converter/folder_opener');
       await platform.invokeMethod('openFolder', {'path': directory});
     } catch (e) {
@@ -329,6 +314,190 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         );
       }
     }
+  }
+
+  Future<void> _copyToClipboard(ConversionLogEntry entry) async {
+    try {
+      await Clipboard.setData(ClipboardData(text: entry.convertedPath));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('File path copied to clipboard'),
+            backgroundColor: Theme.of(context).colorScheme.primary,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not copy to clipboard: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _moveToDirectory(ConversionLogEntry entry) async {
+    try {
+      String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
+        dialogTitle: 'Select destination folder',
+        initialDirectory: '/storage/emulated/0',
+      );
+      
+      if (selectedDirectory != null) {
+        final sourceFile = File(entry.convertedPath);
+        final destinationPath = '$selectedDirectory/${entry.fileName}';
+        final destinationFile = File(destinationPath);
+        
+        // Check if destination file already exists
+        if (await destinationFile.exists()) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('File already exists in destination folder'),
+                backgroundColor: Theme.of(context).colorScheme.error,
+              ),
+            );
+          }
+          return;
+        }
+        
+        await sourceFile.copy(destinationPath);
+        await sourceFile.delete();
+        
+        // Remove from conversion log
+        await ConversionLogService.removeEntry(entry.id);
+        
+        // Refresh the list
+        await _loadConvertedVideos();
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('File moved to $selectedDirectory'),
+              backgroundColor: Theme.of(context).colorScheme.primary,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not move file: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _performSwipeAction(SwipeAction action, ConversionLogEntry entry) async {
+    switch (action) {
+      case SwipeAction.none:
+        break;
+      case SwipeAction.delete:
+        final confirmed = await _showDeleteConfirmation(entry);
+        if (confirmed) {
+          await _deleteFile(entry);
+        }
+        break;
+      case SwipeAction.openDirectory:
+        await _openFileLocation(entry);
+        break;
+      case SwipeAction.copyToClipboard:
+        await _copyToClipboard(entry);
+        break;
+      case SwipeAction.moveToDirectory:
+        await _moveToDirectory(entry);
+        break;
+    }
+  }
+
+  Future<void> _deleteFile(ConversionLogEntry entry) async {
+    try {
+      final fileToDelete = File(entry.convertedPath);
+      if (await fileToDelete.exists()) {
+        await fileToDelete.delete();
+      }
+      
+      // Remove from conversion log
+      await ConversionLogService.removeEntry(entry.id);
+      
+      // Refresh the list
+      await _loadConvertedVideos();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('File deleted'),
+            backgroundColor: Theme.of(context).colorScheme.primary,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting file: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildLeadingWidget(ConversionLogEntry entry) {
+    if (!useThumbnails) {
+      return const Icon(Icons.video_file, size: 40);
+    }
+
+    final thumbnailPath = thumbnailCache[entry.convertedPath];
+    
+    if (thumbnailPath == null) {
+      // Loading thumbnail
+      return Container(
+        width: 60,
+        height: 40,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceVariant,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Center(
+          child: SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+    
+    return Container(
+      width: 60,
+      height: 40,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: thumbnailPath.isNotEmpty
+          ? Image.file(
+              File(thumbnailPath),
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return const Icon(Icons.video_file, size: 24);
+              },
+            )
+          : const Icon(Icons.video_file, size: 24),
+      ),
+    );
   }
 
   @override
@@ -377,9 +546,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              defaultDirectory != null 
-                ? 'From ${defaultDirectory!.split('/').last}' 
-                : 'No output directory found',
+              convertedVideos.isNotEmpty 
+                ? '${convertedVideos.length} videos found' 
+                : 'No converted videos found',
               style: TextStyle(
                 fontSize: 16,
                 color: Theme.of(context).brightness == Brightness.dark
@@ -391,7 +560,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             Expanded(
               child: isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : defaultDirectoryFiles.isEmpty
+                : convertedVideos.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -405,7 +574,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            'No videos found',
+                            'No converted videos found',
                             style: TextStyle(
                               fontSize: 18,
                               color: Theme.of(context).brightness == Brightness.dark
@@ -415,7 +584,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Tap the button below to select videos',
+                            'Convert videos to see them here',
                             style: TextStyle(
                               fontSize: 14,
                               color: Theme.of(context).brightness == Brightness.dark
@@ -427,43 +596,52 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                     )
                   : RefreshIndicator(
-                      onRefresh: _loadDefaultDirectoryFiles,
+                      onRefresh: _loadConvertedVideos,
                       child: ListView.builder(
-                        itemCount: defaultDirectoryFiles.length,
+                        itemCount: convertedVideos.length,
                         itemBuilder: (context, index) {
-                          final file = defaultDirectoryFiles[index];
+                          final entry = convertedVideos[index];
                           final isSelected = selectedIndices.contains(index);
                           
                           return Dismissible(
-                            key: Key(file.path),
-                            background: Container(
+                            key: Key(entry.convertedPath),
+                            background: leftSwipeAction != SwipeAction.none ? Container(
                               alignment: Alignment.centerLeft,
                               padding: const EdgeInsets.only(left: 20),
-                              color: Colors.blue,
-                              child: const Icon(
-                                Icons.folder_open,
+                              color: SwipeActionHelper.actionColors[leftSwipeAction],
+                              child: Icon(
+                                SwipeActionHelper.actionIcons[leftSwipeAction],
                                 color: Colors.white,
                                 size: 30,
                               ),
-                            ),
-                            secondaryBackground: Container(
+                            ) : null,
+                            secondaryBackground: rightSwipeAction != SwipeAction.none ? Container(
                               alignment: Alignment.centerRight,
                               padding: const EdgeInsets.only(right: 20),
-                              color: Colors.red,
-                              child: const Icon(
-                                Icons.delete,
+                              color: SwipeActionHelper.actionColors[rightSwipeAction],
+                              child: Icon(
+                                SwipeActionHelper.actionIcons[rightSwipeAction],
                                 color: Colors.white,
                                 size: 30,
                               ),
-                            ),
+                            ) : null,
                             confirmDismiss: (direction) async {
-                              if (direction == DismissDirection.endToStart) {
-                                // Right swipe (delete)
-                                return await _showDeleteConfirmation(file);
-                              } else if (direction == DismissDirection.startToEnd) {
-                                // Left swipe (open folder)
-                                await _openFileLocation(file);
-                                return false; // Don't dismiss
+                              if (direction == DismissDirection.endToStart && rightSwipeAction != SwipeAction.none) {
+                                // Right swipe
+                                if (rightSwipeAction == SwipeAction.delete) {
+                                  return await _showDeleteConfirmation(entry);
+                                } else {
+                                  await _performSwipeAction(rightSwipeAction, entry);
+                                  return false; // Don't dismiss unless deleting
+                                }
+                              } else if (direction == DismissDirection.startToEnd && leftSwipeAction != SwipeAction.none) {
+                                // Left swipe
+                                if (leftSwipeAction == SwipeAction.delete) {
+                                  return await _showDeleteConfirmation(entry);
+                                } else {
+                                  await _performSwipeAction(leftSwipeAction, entry);
+                                  return false; // Don't dismiss unless deleting
+                                }
                               }
                               return false;
                             },
@@ -476,18 +654,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                       _toggleSelection(index);
                                     },
                                   )
-                                : const Icon(Icons.video_file, size: 40),
+                                : _buildLeadingWidget(entry),
                               title: Text(
-                                file.name,
+                                entry.fileName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(file.sizeFormatted),
+                                  Text('${entry.convertedSizeFormatted} • ${entry.convertedFormat.toUpperCase()}'),
                                   Text(
-                                    file.createdAt.toString().split('.')[0],
+                                    entry.convertedAt.toString().split('.')[0],
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Theme.of(context).brightness == Brightness.dark
@@ -500,10 +678,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               trailing: isSelectionMode 
                                 ? null
                                 : IconButton(
-                                    icon: const Icon(Icons.arrow_forward),
+                                    icon: const Icon(Icons.play_arrow),
                                     onPressed: () {
                                       if (!isSelectionMode) {
-                                        context.go('/converter', extra: [file]);
+                                        // Convert ConversionLogEntry to VideoFile for compatibility
+                                        final videoFile = VideoFile(
+                                          path: entry.convertedPath,
+                                          name: entry.fileName,
+                                          extension: entry.convertedFormat,
+                                          size: entry.convertedSize,
+                                          createdAt: entry.convertedAt,
+                                        );
+                                        context.go('/converter', extra: [videoFile]);
                                       }
                                     },
                                   ),
@@ -512,7 +698,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 if (isSelectionMode) {
                                   _toggleSelection(index);
                                 } else {
-                                  context.go('/converter', extra: [file]);
+                                  // Convert ConversionLogEntry to VideoFile for compatibility
+                                  final videoFile = VideoFile(
+                                    path: entry.convertedPath,
+                                    name: entry.fileName,
+                                    extension: entry.convertedFormat,
+                                    size: entry.convertedSize,
+                                    createdAt: entry.convertedAt,
+                                  );
+                                  context.go('/converter', extra: [videoFile]);
                                 }
                               },
                               onLongPress: () {

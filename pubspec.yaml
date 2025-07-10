@@ -20,6 +20,8 @@ dependencies:
   flutter_riverpod: ^2.3.6
   go_router: ^16.0.0
   shared_preferences: ^2.2.2
+  flutter_colorpicker: ^1.1.0
+  video_thumbnail: ^0.5.3
 
 dev_dependencies:
   flutter_test:

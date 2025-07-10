@@ -1,8 +1,8 @@
 import 'package:video_compress/video_compress.dart';
-import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'dart:async';
 import '../models/video_file.dart';
+import 'conversion_log_service.dart';
 
 class VideoConverterService {
   Function(double)? onProgress;
@@ -27,7 +27,6 @@ class VideoConverterService {
     // Use the full output path provided by the task
     final outputPath = task.outputPath;
     final outputDir = Directory(outputPath).parent.path;
-    final outputFileName = outputPath.split('/').last;
     
     print('Video Converter - Input: ${task.inputFile.path}');
     print('Video Converter - Output Dir: $outputDir');
@@ -115,6 +114,10 @@ class VideoConverterService {
             
             final outputSize = await outputFile.length();
             print('Output file created successfully: $outputPath (${outputSize} bytes)');
+            
+            // Log the successful conversion
+            await _logConversion(task, outputPath, outputSize);
+            
             return outputPath;
           } else {
             // For other formats, we'll use the compressed MP4 as is
@@ -136,6 +139,10 @@ class VideoConverterService {
             
             final outputSize = await outputFile.length();
             print('Output file created successfully: $mp4Path (${outputSize} bytes)');
+            
+            // Log the successful conversion
+            await _logConversion(task, mp4Path, outputSize);
+            
             return mp4Path;
           }
         } catch (e) {
@@ -152,6 +159,28 @@ class VideoConverterService {
       }
     } catch (e) {
       throw Exception('Video conversion failed: $e');
+    }
+  }
+
+  Future<void> _logConversion(ConversionTask task, String outputPath, int outputSize) async {
+    try {
+      // Extract format from output path
+      final outputFormat = outputPath.split('.').last.toLowerCase();
+      
+      await ConversionLogService.addConversionEntry(
+        originalPath: task.inputFile.path,
+        convertedPath: outputPath,
+        originalFormat: task.inputFile.extension.toLowerCase(),
+        convertedFormat: outputFormat,
+        quality: task.quality,
+        originalSize: task.inputFile.size,
+        convertedSize: outputSize,
+      );
+      
+      print('Conversion logged successfully');
+    } catch (e) {
+      print('Failed to log conversion: $e');
+      // Don't throw here as the conversion itself was successful
     }
   }
   
