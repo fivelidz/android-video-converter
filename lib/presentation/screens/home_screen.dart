@@ -31,34 +31,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ],
       ),
-      body: const Padding(
-        padding: EdgeInsets.all(16.0),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               'Convert Your Videos',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
               ),
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 8),
             Text(
               'Select a video file to convert to different formats',
               style: TextStyle(
                 fontSize: 16,
-                color: Colors.grey,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.grey[400]
+                    : Colors.grey,
               ),
             ),
-            SizedBox(height: 32),
+            const SizedBox(height: 32),
             Expanded(
               child: Center(
                 child: Text(
                   'No videos selected yet',
                   style: TextStyle(
                     fontSize: 18,
-                    color: Colors.grey,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey[400]
+                        : Colors.grey,
                   ),
                 ),
               ),

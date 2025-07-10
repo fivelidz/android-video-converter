@@ -16,7 +16,7 @@ class MyApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeProvider);
-    
+
     return MaterialApp.router(
       title: 'Video Converter',
       theme: ThemeData(
@@ -48,3 +48,4 @@ final GoRouter _router = GoRouter(
     ),
   ],
 );
+
