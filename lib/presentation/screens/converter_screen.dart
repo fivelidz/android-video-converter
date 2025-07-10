@@ -605,13 +605,15 @@ class _ConverterScreenState extends ConsumerState<ConverterScreen> with WidgetsB
           
           if (convertedPaths.isNotEmpty) {
             final outputDir = File(convertedPaths.first).parent.path;
+            final actualFormat = convertedPaths.first.split('.').last.toUpperCase();
             message += 'Saved to: $outputDir';
+            message += '\nFormat: $actualFormat';
             
-            // Check format limitation
-            final actualFormat = convertedPaths.first.split('.').last;
+            // Check if format was changed due to fallback
             final requestedFormat = selectedFormat.toLowerCase();
-            if (actualFormat != requestedFormat && requestedFormat != 'mp4' && requestedFormat != 'mov') {
-              message += '\n\nNote: Output saved as MP4 format. Other formats require FFmpeg for true conversion.';
+            final actualFormatLower = actualFormat.toLowerCase();
+            if (actualFormatLower != requestedFormat && actualFormatLower == 'mp4' && requestedFormat != 'mp4' && requestedFormat != 'mov') {
+              message += '\n\nNote: Converted to MP4 format (FFmpeg required for ${requestedFormat.toUpperCase()} conversion).';
             }
           }
         } else {
