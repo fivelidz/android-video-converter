@@ -12,7 +12,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
+          onPressed: () => context.go('/settings'),
         ),
       ),
       body: const SingleChildScrollView(
