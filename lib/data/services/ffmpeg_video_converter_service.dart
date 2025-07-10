@@ -119,6 +119,10 @@ class FFmpegVideoConverterService {
         }
         
         print('Conversion successful: $outputPath (${outputSize} bytes)');
+        
+        // Add small delay to ensure file system sync on Android
+        await Future.delayed(Duration(milliseconds: 500));
+        
         return outputPath;
       } else {
         final failureReason = await session.getFailStackTrace();
@@ -132,8 +136,8 @@ class FFmpegVideoConverterService {
   String _buildFFmpegCommand(String inputPath, String outputPath, String format, String quality) {
     final buffer = StringBuffer();
     
-    // Input file
-    buffer.write('-i "$inputPath" ');
+    // Input file with timestamp preservation
+    buffer.write('-i "$inputPath" -avoid_negative_ts make_zero ');
     
     // Video codec and settings based on format
     switch (format.toLowerCase()) {
@@ -164,7 +168,12 @@ class FFmpegVideoConverterService {
     buffer.write('-crf $crf ');
     
     // Additional settings for better compatibility
-    buffer.write('-preset medium -movflags +faststart ');
+    buffer.write('-preset medium ');
+    
+    // Add container-specific optimizations
+    if (format.toLowerCase() == 'mp4' || format.toLowerCase() == 'mov') {
+      buffer.write('-movflags +faststart ');
+    }
     
     // Output file
     buffer.write('"$outputPath"');
