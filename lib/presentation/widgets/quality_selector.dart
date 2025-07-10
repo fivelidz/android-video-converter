@@ -27,16 +27,30 @@ class QualitySelector extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            Column(
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: AppConstants.qualityPresets.entries.map((entry) {
-                return RadioListTile<String>(
-                  title: Text(entry.key),
-                  subtitle: Text(entry.value),
-                  value: entry.key,
-                  groupValue: selectedQuality,
-                  onChanged: (value) {
-                    if (value != null) {
-                      onQualityChanged(value);
+                return ChoiceChip(
+                  label: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(entry.key),
+                      Text(
+                        entry.value,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.grey[400]
+                              : Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                  selected: selectedQuality == entry.key,
+                  onSelected: (selected) {
+                    if (selected) {
+                      onQualityChanged(entry.key);
                     }
                   },
                 );

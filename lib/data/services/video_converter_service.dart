@@ -24,27 +24,28 @@ class VideoConverterService {
       throw Exception('Cannot read input video file: $e');
     }
     
-    // Use the custom output directory from the task if provided
-    final outputDir = task.outputPath.contains('/') 
-        ? Directory(task.outputPath).parent.path
-        : (await getApplicationDocumentsDirectory()).path;
+    // Use the full output path provided by the task
+    final outputPath = task.outputPath;
+    final outputDir = Directory(outputPath).parent.path;
+    final outputFileName = outputPath.split('/').last;
     
-    final outputFileName = task.outputPath.contains('/') 
-        ? task.outputPath.split('/').last
-        : '${task.inputFile.displayName}_converted.${task.outputFormat}';
-    
-    final outputPath = task.outputPath.contains('/') 
-        ? task.outputPath 
-        : '$outputDir/$outputFileName';
+    print('Video Converter - Input: ${task.inputFile.path}');
+    print('Video Converter - Output Dir: $outputDir');
+    print('Video Converter - Output Path: $outputPath');
     
     // Ensure the output directory exists
     final outputDirectory = Directory(outputDir);
     if (!await outputDirectory.exists()) {
       try {
+        print('Creating output directory: $outputDir');
         await outputDirectory.create(recursive: true);
+        print('Successfully created directory: $outputDir');
       } catch (e) {
+        print('Failed to create output directory: $e');
         throw Exception('Failed to create output directory: $e');
       }
+    } else {
+      print('Output directory already exists: $outputDir');
     }
     
     // Verify we can write to the directory
@@ -63,6 +64,9 @@ class VideoConverterService {
     VideoQuality quality = _getVideoQuality(task.quality);
     
     try {
+      // Cancel any previous operations to ensure clean state
+      await VideoCompress.cancelCompression();
+      
       // Set up progress subscription
       final subscription = VideoCompress.compressProgress$.subscribe((progress) {
         onProgress?.call(progress);
@@ -90,11 +94,18 @@ class VideoConverterService {
         }
         
         try {
+          print('Compressed file created at: ${info.file!.path}');
+          print('Compressed file size: ${await info.file!.length()} bytes');
+          
           // video_compress always outputs MP4, so we need to handle format conversion
           if (task.outputFormat.toLowerCase() == 'mp4' || task.outputFormat.toLowerCase() == 'mov') {
             // For MP4/MOV, we can use the compressed file directly
+            print('Copying compressed file to: $outputPath');
             await info.file!.copy(outputPath);
+            print('File copied successfully');
+            
             await info.file!.delete(); // Clean up temp file
+            print('Temp file cleaned up');
             
             // Verify the output file was created successfully
             final outputFile = File(outputPath);
@@ -102,14 +113,20 @@ class VideoConverterService {
               throw Exception('Failed to create output file at: $outputPath');
             }
             
+            final outputSize = await outputFile.length();
+            print('Output file created successfully: $outputPath (${outputSize} bytes)');
             return outputPath;
           } else {
             // For other formats, we'll use the compressed MP4 as is
             // Note: video_compress doesn't support other formats natively
             // This is a limitation of the library - true format conversion requires FFmpeg
             final mp4Path = outputPath.replaceAll('.${task.outputFormat}', '.mp4');
+            print('Copying compressed file to: $mp4Path (format converted to MP4)');
             await info.file!.copy(mp4Path);
+            print('File copied successfully');
+            
             await info.file!.delete(); // Clean up temp file
+            print('Temp file cleaned up');
             
             // Verify the output file was created successfully
             final outputFile = File(mp4Path);
@@ -117,7 +134,8 @@ class VideoConverterService {
               throw Exception('Failed to create output file at: $mp4Path');
             }
             
-            // Return the MP4 path and notify user about format limitation
+            final outputSize = await outputFile.length();
+            print('Output file created successfully: $mp4Path (${outputSize} bytes)');
             return mp4Path;
           }
         } catch (e) {
