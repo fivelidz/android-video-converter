@@ -10,7 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.2
-  # ffmpeg_kit_flutter: ^6.0.3  # Repository issue
+  ffmpeg_kit_flutter_new: ^2.0.0  # FFmpeg for WebM, MKV, AVI conversion
   video_compress: ^3.1.3  # Alternative video processing
   file_picker: ^8.1.2
   path_provider: ^2.0.15
@@ -19,6 +19,7 @@ dependencies:
   video_player: ^2.7.0
   flutter_riverpod: ^2.3.6
   go_router: ^16.0.0
+  shared_preferences: ^2.2.2
 
 dev_dependencies:
   flutter_test:
