@@ -104,7 +104,6 @@ class FFmpegVideoConverterService {
       );
       
       // Wait for completion
-      await session.getReturnCode();
       final returnCode = await session.getReturnCode();
       
       if (returnCode?.isValueSuccess() == true) {
