@@ -1,7 +1,5 @@
-import 'package:ffmpeg_kit_flutter/ffmpeg_kit.dart';
-import 'package:ffmpeg_kit_flutter/return_code.dart';
+import 'package:video_compress/video_compress.dart';
 import 'package:path_provider/path_provider.dart';
-import 'dart:io';
 import '../models/video_file.dart';
 
 class VideoConverterService {
@@ -10,50 +8,43 @@ class VideoConverterService {
     final outputFileName = '${task.inputFile.displayName}_converted.${task.outputFormat}';
     final outputPath = '${outputDir.path}/$outputFileName';
     
-    String command = _buildFFmpegCommand(
+    // Use video_compress for video processing
+    VideoQuality quality = _getVideoQuality(task.quality);
+    
+    final info = await VideoCompress.compressVideo(
       task.inputFile.path,
-      outputPath,
-      task.outputFormat,
-      task.quality,
+      quality: quality,
+      deleteOrigin: false,
+      includeAudio: true,
     );
     
-    final session = await FFmpegKit.execute(command);
-    final returnCode = await session.getReturnCode();
-    
-    if (ReturnCode.isSuccess(returnCode)) {
+    if (info != null && info.file != null) {
+      // Move compressed file to desired output path
+      await info.file!.copy(outputPath);
+      await info.file!.delete(); // Clean up temp file
       return outputPath;
     } else {
-      final failStackTrace = await session.getFailStackTrace();
-      throw Exception('Conversion failed: $failStackTrace');
+      throw Exception('Video compression failed');
     }
   }
   
-  String _buildFFmpegCommand(String inputPath, String outputPath, String format, String quality) {
-    String videoCodec = 'libx264';
-    String audioCodec = 'aac';
-    String resolution = _getResolutionForQuality(quality);
-    
-    return '-i "$inputPath" -c:v $videoCodec -c:a $audioCodec -s $resolution -y "$outputPath"';
-  }
-  
-  String _getResolutionForQuality(String quality) {
+  VideoQuality _getVideoQuality(String quality) {
     switch (quality) {
       case 'High':
-        return '1920x1080';
+        return VideoQuality.HighestQuality;
       case 'Medium':
-        return '1280x720';
+        return VideoQuality.DefaultQuality;
       case 'Low':
-        return '854x480';
+        return VideoQuality.LowQuality;
       default:
-        return '1280x720';
+        return VideoQuality.DefaultQuality;
     }
   }
   
-  Future<bool> isFFmpegSupported() async {
+  Future<bool> isVideoCompressionSupported() async {
     try {
-      final session = await FFmpegKit.execute('-version');
-      final returnCode = await session.getReturnCode();
-      return ReturnCode.isSuccess(returnCode);
+      // video_compress is always available on Android
+      return true;
     } catch (e) {
       return false;
     }

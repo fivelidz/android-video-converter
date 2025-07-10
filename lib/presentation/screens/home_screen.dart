@@ -1,22 +1,35 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../widgets/video_file_card.dart';
 import '../../core/constants/app_constants.dart';
+import '../../main.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text(AppConstants.appName),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.brightness_6),
+            onPressed: () {
+              final currentTheme = ref.read(themeProvider);
+              ref.read(themeProvider.notifier).state = 
+                currentTheme == ThemeMode.light 
+                  ? ThemeMode.dark 
+                  : ThemeMode.light;
+            },
+          ),
+        ],
       ),
       body: const Padding(
         padding: EdgeInsets.all(16.0),
