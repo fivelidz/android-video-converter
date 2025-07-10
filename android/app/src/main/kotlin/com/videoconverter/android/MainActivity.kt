@@ -1,4 +1,4 @@
-package com.example.android_video_converter
+package com.videoconverter.android
 
 import android.app.Activity
 import android.content.Intent
