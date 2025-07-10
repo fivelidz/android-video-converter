@@ -24,7 +24,7 @@ class ConverterScreen extends ConsumerStatefulWidget {
 class _ConverterScreenState extends ConsumerState<ConverterScreen> with WidgetsBindingObserver {
   List<VideoFile> selectedFiles = [];
   String selectedFormat = 'mp4';
-  String selectedQuality = 'Medium';
+  String selectedQuality = 'High';
   bool isConverting = false;
   double conversionProgress = 0.0;
   int currentFileIndex = 0;
@@ -99,31 +99,61 @@ class _ConverterScreenState extends ConsumerState<ConverterScreen> with WidgetsB
   }
 
   Future<String> _getOrCreateConversionDirectory() async {
-    // Priority 1: Try to create in Movies folder
+    print('*** CONVERTER: _getOrCreateConversionDirectory() called ***');
+    
+    // Priority 1: Check if Movies/VideoConverter already exists (created by main.dart)
+    final moviesDir = Directory('/storage/emulated/0/Movies/VideoConverter');
+    print('*** CONVERTER: Checking Movies directory: ${moviesDir.path} ***');
+    
+    if (await moviesDir.exists()) {
+      print('*** CONVERTER: Movies directory EXISTS ***');
+      try {
+        // Test write permissions
+        final testFile = File('${moviesDir.path}/.test_write_converter');
+        await testFile.writeAsString('converter_test');
+        await testFile.delete();
+        
+        print('*** CONVERTER: Using existing Movies directory: ${moviesDir.path} ***');
+        return moviesDir.path;
+      } catch (e) {
+        print('*** CONVERTER: Movies directory exists but no write permissions: $e ***');
+      }
+    } else {
+      print('*** CONVERTER: Movies directory does NOT exist ***');
+    }
+    
+    // Priority 2: Try to create Movies folder if it doesn't exist
     try {
-      final moviesDir = Directory('/storage/emulated/0/Movies/VideoConverter');
+      print('*** CONVERTER: Attempting to create Movies directory ***');
       if (!await moviesDir.exists()) {
+        // Try to create parent directory first
+        final parentDir = Directory('/storage/emulated/0/Movies');
+        if (!await parentDir.exists()) {
+          await parentDir.create(recursive: true);
+          print('*** CONVERTER: Created Movies parent directory ***');
+        }
+        
         await moviesDir.create(recursive: true);
-        print('Created directory: ${moviesDir.path}');
+        print('*** CONVERTER: Created Movies directory: ${moviesDir.path} ***');
       }
       
       // Test write permissions
-      final testFile = File('${moviesDir.path}/.test_write');
-      await testFile.writeAsString('test');
+      final testFile = File('${moviesDir.path}/.test_write_converter2');
+      await testFile.writeAsString('converter_test2');
       await testFile.delete();
       
-      print('Using Movies directory: ${moviesDir.path}');
+      print('*** CONVERTER: Successfully using Movies directory: ${moviesDir.path} ***');
       return moviesDir.path;
     } catch (e) {
-      print('Failed to create/use Movies directory: $e');
+      print('*** CONVERTER: Failed to create/use Movies directory: $e ***');
     }
     
-    // Priority 2: Try Downloads folder
+    // Priority 3: Fallback to Downloads folder only if Movies fails
     try {
       final downloadDir = Directory('/storage/emulated/0/Download/VideoConverter');
       if (!await downloadDir.exists()) {
         await downloadDir.create(recursive: true);
-        print('Created directory: ${downloadDir.path}');
+        print('Created Downloads directory: ${downloadDir.path}');
       }
       
       // Test write permissions
@@ -131,20 +161,20 @@ class _ConverterScreenState extends ConsumerState<ConverterScreen> with WidgetsB
       await testFile.writeAsString('test');
       await testFile.delete();
       
-      print('Using Downloads directory: ${downloadDir.path}');
+      print('Using Downloads directory (fallback): ${downloadDir.path}');
       return downloadDir.path;
     } catch (e) {
       print('Failed to create/use Downloads directory: $e');
     }
     
-    // Priority 3: Try external storage app directory
+    // Priority 4: Try external storage app directory
     try {
       final Directory? externalDir = await getExternalStorageDirectory();
       if (externalDir != null) {
         final conversionDir = Directory('${externalDir.path}/VideoConverter');
         if (!await conversionDir.exists()) {
           await conversionDir.create(recursive: true);
-          print('Created directory: ${conversionDir.path}');
+          print('Created external storage directory: ${conversionDir.path}');
         }
         
         // Test write permissions
@@ -165,10 +195,10 @@ class _ConverterScreenState extends ConsumerState<ConverterScreen> with WidgetsB
       final conversionDir = Directory('${documentsDir.path}/VideoConverter');
       if (!await conversionDir.exists()) {
         await conversionDir.create(recursive: true);
-        print('Created directory: ${conversionDir.path}');
+        print('Created documents directory: ${conversionDir.path}');
       }
       
-      print('Using documents directory: ${conversionDir.path}');
+      print('Using documents directory (last resort): ${conversionDir.path}');
       return conversionDir.path;
     } catch (e) {
       print('Failed to create documents directory: $e');
@@ -406,26 +436,101 @@ class _ConverterScreenState extends ConsumerState<ConverterScreen> with WidgetsB
     List<String> failedFiles = [];
 
     try {
-      String outputDir;
+      String outputDir = (await getApplicationDocumentsDirectory()).path; // Initialize with safe default
+      
+      print('*** CONVERSION START: Determining output directory ***');
+      print('*** customOutputDirectory: $customOutputDirectory ***');
+      print('*** defaultOutputDirectory: $defaultOutputDirectory ***');
       
       if (customOutputDirectory != null) {
         outputDir = customOutputDirectory!;
-        print('Using custom output directory: $outputDir');
-      } else if (defaultOutputDirectory != null) {
-        outputDir = defaultOutputDirectory!;
-        print('Using default output directory: $outputDir');
+        print('*** CONVERSION: Using custom output directory: $outputDir ***');
       } else {
-        outputDir = (await getApplicationDocumentsDirectory()).path;
-        print('Using fallback documents directory: $outputDir');
+        // Try accessible directories in order of preference
+        final directoryOptions = [
+          '/storage/emulated/0/Download/VideoConverter',
+          '/storage/emulated/0/Movies/VideoConverter',
+        ];
+        
+        bool foundAccessibleDir = false;
+        
+        for (String dirPath in directoryOptions) {
+          try {
+            final dir = Directory(dirPath);
+            
+            // Try to create directory if it doesn't exist
+            if (!await dir.exists()) {
+              await dir.create(recursive: true);
+              print('*** CONVERSION: Created directory: $dirPath ***');
+            }
+            
+            // Test write permissions
+            final testFile = File('$dirPath/.test_conversion');
+            await testFile.writeAsString('conversion_test');
+            await testFile.delete();
+            
+            outputDir = dirPath;
+            foundAccessibleDir = true;
+            print('*** CONVERSION: Using accessible directory: $outputDir ***');
+            break;
+            
+          } catch (e) {
+            print('*** CONVERSION: Cannot access $dirPath: $e ***');
+            continue;
+          }
+        }
+        
+        if (!foundAccessibleDir) {
+          if (defaultOutputDirectory != null) {
+            outputDir = defaultOutputDirectory!;
+            print('*** CONVERSION: Using fallback default directory: $outputDir ***');
+          } else {
+            // Last resort: app-specific external directory
+            try {
+              final Directory? externalDir = await getExternalStorageDirectory();
+              if (externalDir != null) {
+                final conversionDir = Directory('${externalDir.path}/VideoConverter');
+                if (!await conversionDir.exists()) {
+                  await conversionDir.create(recursive: true);
+                }
+                outputDir = conversionDir.path;
+                print('*** CONVERSION: Using app external directory: $outputDir ***');
+              } else {
+                outputDir = (await getApplicationDocumentsDirectory()).path;
+                print('*** CONVERSION: Using documents directory: $outputDir ***');
+              }
+            } catch (e) {
+              outputDir = (await getApplicationDocumentsDirectory()).path;
+              print('*** CONVERSION: Using final fallback documents directory: $outputDir ***');
+            }
+          }
+        }
       }
       
       // Ensure the output directory exists
       final outputDirectory = Directory(outputDir);
       if (!await outputDirectory.exists()) {
         print('Output directory does not exist, creating: $outputDir');
-        await outputDirectory.create(recursive: true);
+        try {
+          await outputDirectory.create(recursive: true);
+          print('Successfully created output directory: $outputDir');
+        } catch (e) {
+          print('Failed to create output directory: $e');
+          throw Exception('Cannot create output directory: $outputDir. Error: $e');
+        }
       } else {
         print('Output directory exists: $outputDir');
+      }
+      
+      // Test write permissions
+      try {
+        final testFile = File('$outputDir/.test_write');
+        await testFile.writeAsString('test');
+        await testFile.delete();
+        print('Write permissions verified for: $outputDir');
+      } catch (e) {
+        print('No write permissions for directory: $outputDir');
+        throw Exception('Cannot write to output directory: $outputDir. Please choose a different directory.');
       }
       
       // Set up progress tracking for batch conversion
@@ -558,9 +663,9 @@ class _ConverterScreenState extends ConsumerState<ConverterScreen> with WidgetsB
     } else if (selectedFiles.isEmpty) {
       return 'No files selected';
     } else if (selectedFiles.length == 1) {
-      return selectedFiles.first.displayName;
+      return '${selectedFiles.first.displayName}.$selectedFormat';
     } else {
-      return '${selectedFiles.first.displayName} (+ ${selectedFiles.length - 1} more)';
+      return '${selectedFiles.first.displayName}.$selectedFormat (+ ${selectedFiles.length - 1} more)';
     }
   }
 
@@ -826,40 +931,6 @@ class _ConverterScreenState extends ConsumerState<ConverterScreen> with WidgetsB
                 ),
                 const SizedBox(height: 16),
                 
-                // Output filename editor
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Output Filename',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _filenameController,
-                          focusNode: _filenameFocusNode,
-                          decoration: InputDecoration(
-                            hintText: _getFilenameHint(),
-                            border: const OutlineInputBorder(),
-                            suffixText: '.$selectedFormat',
-                            fillColor: Theme.of(context).brightness == Brightness.dark
-                                ? Colors.grey.shade900
-                                : Colors.white,
-                            filled: true,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                
                 // Output directory selector
                 Card(
                   child: Padding(
@@ -911,6 +982,42 @@ class _ConverterScreenState extends ConsumerState<ConverterScreen> with WidgetsB
                     ),
                   ),
                 ),
+                const SizedBox(height: 16),
+                
+                // Output filename editor
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Output Filename',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _filenameController,
+                          focusNode: _filenameFocusNode,
+                          decoration: InputDecoration(
+                            hintText: _getFilenameHint(),
+                            border: const OutlineInputBorder(),
+                            suffixText: (_isFilenameFocused || _filenameController.text.isNotEmpty) 
+                                ? '.$selectedFormat' 
+                                : null,
+                            fillColor: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.grey.shade900
+                                : Colors.white,
+                            filled: true,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 24),
                 
                 // Conversion progress or controls
@@ -947,7 +1054,7 @@ class _ConverterScreenState extends ConsumerState<ConverterScreen> with WidgetsB
                             setState(() {
                               selectedFiles = [];
                               selectedFormat = 'mp4';
-                              selectedQuality = 'Medium';
+                              selectedQuality = 'High';
                               isConverting = false;
                               conversionProgress = 0.0;
                               customOutputDirectory = null;
