@@ -19,11 +19,13 @@ class ConverterScreen extends ConsumerStatefulWidget {
 }
 
 class _ConverterScreenState extends ConsumerState<ConverterScreen> {
-  VideoFile? selectedFile;
+  List<VideoFile> selectedFiles = [];
   String selectedFormat = 'mp4';
   String selectedQuality = 'Medium';
   bool isConverting = false;
   double conversionProgress = 0.0;
+  int currentFileIndex = 0;
+  int totalFiles = 0;
   String? customOutputDirectory;
   String? defaultOutputDirectory;
   final TextEditingController _filenameController = TextEditingController();
@@ -53,27 +55,35 @@ class _ConverterScreenState extends ConsumerState<ConverterScreen> {
 
   Future<String> _getOrCreateConversionDirectory() async {
     try {
-      // Get external storage directory
-      final Directory? externalDir = await getExternalStorageDirectory();
-      if (externalDir != null) {
-        // Create VideoConverter directory in external storage
-        final conversionDir = Directory('${externalDir.path}/VideoConverter');
+      // Create directory in accessible Downloads folder
+      final downloadDir = Directory('/storage/emulated/0/Download/VideoConverter');
+      if (!await downloadDir.exists()) {
+        await downloadDir.create(recursive: true);
+      }
+      return downloadDir.path;
+    } catch (e) {
+      try {
+        // Fallback to external storage
+        final Directory? externalDir = await getExternalStorageDirectory();
+        if (externalDir != null) {
+          final conversionDir = Directory('${externalDir.path}/VideoConverter');
+          if (!await conversionDir.exists()) {
+            await conversionDir.create(recursive: true);
+          }
+          return conversionDir.path;
+        }
+      } catch (e2) {
+        // Final fallback to documents
+        final documentsDir = await getApplicationDocumentsDirectory();
+        final conversionDir = Directory('${documentsDir.path}/VideoConverter');
         if (!await conversionDir.exists()) {
           await conversionDir.create(recursive: true);
         }
         return conversionDir.path;
       }
-    } catch (e) {
-      // Fallback to documents directory
-      final documentsDir = await getApplicationDocumentsDirectory();
-      final conversionDir = Directory('${documentsDir.path}/VideoConverter');
-      if (!await conversionDir.exists()) {
-        await conversionDir.create(recursive: true);
-      }
-      return conversionDir.path;
     }
     
-    // Final fallback
+    // Last resort
     final documentsDir = await getApplicationDocumentsDirectory();
     return documentsDir.path;
   }
@@ -123,12 +133,18 @@ class _ConverterScreenState extends ConsumerState<ConverterScreen> {
     return null;
   }
 
-  Future<String?> _pickVideoFileNative() async {
+  Future<List<String>?> _pickVideoFileNative() async {
     try {
       // Use Android's native intent to open Videos category
       const platform = MethodChannel('video_converter/file_picker');
-      final String? result = await platform.invokeMethod('pickVideoFromGallery');
-      return result;
+      final dynamic result = await platform.invokeMethod('pickVideoFromGallery');
+      
+      if (result is List) {
+        return result.cast<String>();
+      } else if (result is String) {
+        return [result];
+      }
+      return null;
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -141,53 +157,60 @@ class _ConverterScreenState extends ConsumerState<ConverterScreen> {
 
   Future<void> _pickVideoFile() async {
     try {
-      // First try the native Android approach for Videos category
-      String? nativeResult = await _pickVideoFileNative();
+      // Try native picker first for Videos category (supports multiple files)
+      List<String>? nativePaths = await _pickVideoFileNative();
       
-      if (nativeResult != null) {
-        // Handle native result
-        final file = File(nativeResult);
-        if (await file.exists()) {
-          final stat = await file.stat();
-          setState(() {
-            selectedFile = VideoFile(
+      if (nativePaths != null && nativePaths.isNotEmpty) {
+        List<VideoFile> newFiles = [];
+        for (String path in nativePaths) {
+          final file = File(path);
+          if (await file.exists()) {
+            final stat = await file.stat();
+            newFiles.add(VideoFile(
               path: file.path,
               name: file.path.split('/').last,
               extension: file.path.split('.').last,
               size: stat.size,
               createdAt: stat.modified,
-            );
-            _filenameController.text = selectedFile!.displayName;
+            ));
+          }
+        }
+        
+        if (newFiles.isNotEmpty) {
+          setState(() {
+            selectedFiles = newFiles;
+            totalFiles = selectedFiles.length;
+            _filenameController.clear();
           });
           return;
         }
       }
       
-      // Fallback to file_picker with smart directory detection
-      String? initialDirectory = await _getVideosDirectory();
-      
+      // Fallback to file_picker without initialDirectory to avoid cache issues
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.video,
-        allowMultiple: false,
-        dialogTitle: 'Select Video File',
-        initialDirectory: initialDirectory,
+        allowMultiple: true,
+        dialogTitle: 'Select Video Files',
       );
 
-      if (result != null) {
-        final file = result.files.first;
-        if (file.path != null) {
-          setState(() {
-            selectedFile = VideoFile(
+      if (result != null && result.files.isNotEmpty) {
+        List<VideoFile> newFiles = [];
+        for (var file in result.files) {
+          if (file.path != null) {
+            newFiles.add(VideoFile(
               path: file.path!,
               name: file.name,
               extension: file.extension ?? '',
               size: file.size,
               createdAt: DateTime.now(),
-            );
-            _filenameController.text = selectedFile!.displayName;
-          });
+            ));
+          }
         }
-      }
+        setState(() {
+          selectedFiles = newFiles;
+          totalFiles = selectedFiles.length;
+          _filenameController.clear(); // Clear for batch processing
+        });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -199,11 +222,12 @@ class _ConverterScreenState extends ConsumerState<ConverterScreen> {
 
   Future<void> _pickOutputDirectory() async {
     try {
-      // Start from the current output directory or default
-      String? initialDirectory = customOutputDirectory ?? defaultOutputDirectory;
+      // Start from Android storage base for easy navigation
+      String? initialDirectory = '/storage/emulated/0';
       
       String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
         initialDirectory: initialDirectory,
+        dialogTitle: 'Choose Output Directory',
       );
       if (selectedDirectory != null) {
         setState(() {
@@ -220,37 +244,61 @@ class _ConverterScreenState extends ConsumerState<ConverterScreen> {
   }
 
   Future<void> _startConversion() async {
-    if (selectedFile == null) return;
+    if (selectedFiles.isEmpty) return;
 
     setState(() {
       isConverting = true;
       conversionProgress = 0.0;
+      currentFileIndex = 0;
     });
+
+    List<String> convertedPaths = [];
+    List<String> failedFiles = [];
 
     try {
       final outputDir = customOutputDirectory ?? 
                         defaultOutputDirectory ?? 
                         (await getApplicationDocumentsDirectory()).path;
-      final outputFileName = '${_filenameController.text}.$selectedFormat';
-      final outputPath = '$outputDir/$outputFileName';
       
-      final conversionTask = ConversionTask(
-        inputFile: selectedFile!,
-        outputFormat: selectedFormat,
-        quality: selectedQuality,
-        outputPath: outputPath,
-      );
-      
-      // Set up real progress tracking from video_compress
+      // Set up progress tracking for batch conversion
       _converterService.onProgress = (progress) {
         if (mounted && isConverting) {
+          // Calculate overall progress: (completed files + current file progress) / total files
+          final overallProgress = (currentFileIndex + (progress / 100.0)) / totalFiles;
           setState(() {
-            conversionProgress = progress / 100.0; // Convert to 0-1 range
+            conversionProgress = overallProgress;
           });
         }
       };
       
-      final convertedPath = await _converterService.convertVideo(conversionTask);
+      // Convert each file
+      for (int i = 0; i < selectedFiles.length; i++) {
+        if (!isConverting) break; // Stop if conversion was cancelled
+        
+        setState(() {
+          currentFileIndex = i;
+        });
+        
+        final file = selectedFiles[i];
+        final outputFileName = _filenameController.text.isNotEmpty 
+            ? '${_filenameController.text}_${i + 1}.$selectedFormat'
+            : '${file.displayName}_converted.$selectedFormat';
+        final outputPath = '$outputDir/$outputFileName';
+        
+        final conversionTask = ConversionTask(
+          inputFile: file,
+          outputFormat: selectedFormat,
+          quality: selectedQuality,
+          outputPath: outputPath,
+        );
+        
+        try {
+          final convertedPath = await _converterService.convertVideo(conversionTask);
+          convertedPaths.add(convertedPath);
+        } catch (e) {
+          failedFiles.add(file.name);
+        }
+      }
       
       setState(() {
         isConverting = false;
@@ -258,27 +306,42 @@ class _ConverterScreenState extends ConsumerState<ConverterScreen> {
       });
       
       if (mounted) {
-        // Check if format conversion was limited
-        final actualFormat = convertedPath.split('.').last;
-        final requestedFormat = selectedFormat.toLowerCase();
-        
-        String message = 'Conversion completed!\nSaved to: $convertedPath';
-        if (actualFormat != requestedFormat && requestedFormat != 'mp4' && requestedFormat != 'mov') {
-          message += '\n\nNote: Output saved as MP4 format. Other formats require FFmpeg for true conversion.';
+        String message;
+        if (convertedPaths.isNotEmpty) {
+          if (failedFiles.isEmpty) {
+            message = 'All ${convertedPaths.length} video${convertedPaths.length > 1 ? 's' : ''} converted successfully!\n';
+          } else {
+            message = '${convertedPaths.length} video${convertedPaths.length > 1 ? 's' : ''} converted successfully.\n${failedFiles.length} failed: ${failedFiles.join(', ')}\n';
+          }
+          
+          if (convertedPaths.isNotEmpty) {
+            final outputDir = File(convertedPaths.first).parent.path;
+            message += 'Saved to: $outputDir';
+            
+            // Check format limitation
+            final actualFormat = convertedPaths.first.split('.').last;
+            final requestedFormat = selectedFormat.toLowerCase();
+            if (actualFormat != requestedFormat && requestedFormat != 'mp4' && requestedFormat != 'mov') {
+              message += '\n\nNote: Output saved as MP4 format. Other formats require FFmpeg for true conversion.';
+            }
+          }
+        } else {
+          message = 'All conversions failed. Please check your files and try again.';
         }
         
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(message),
-            duration: const Duration(seconds: 6),
-            action: SnackBarAction(
+            duration: const Duration(seconds: 8),
+            action: convertedPaths.isNotEmpty ? SnackBarAction(
               label: 'Open Folder',
               onPressed: () async {
+                final outputDir = File(convertedPaths.first).parent.path;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('File saved to: ${File(convertedPath).parent.path}')),
+                  SnackBar(content: Text('Files saved to: $outputDir')),
                 );
               },
-            ),
+            ) : null,
           ),
         );
       }
@@ -296,6 +359,19 @@ class _ConverterScreenState extends ConsumerState<ConverterScreen> {
           ),
         );
       }
+    }
+  }
+
+  String _getTotalSizeFormatted() {
+    if (selectedFiles.isEmpty) return '0 MB';
+    
+    int totalBytes = selectedFiles.fold(0, (sum, file) => sum + file.size);
+    double totalMB = totalBytes / 1024 / 1024;
+    
+    if (totalMB >= 1024) {
+      return '${(totalMB / 1024).toStringAsFixed(2)} GB';
+    } else {
+      return '${totalMB.toStringAsFixed(2)} MB';
     }
   }
 
@@ -351,7 +427,7 @@ class _ConverterScreenState extends ConsumerState<ConverterScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      if (selectedFile != null)
+                      if (selectedFiles.isNotEmpty)
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
@@ -360,34 +436,72 @@ class _ConverterScreenState extends ConsumerState<ConverterScreen> {
                                 : Colors.grey.shade100,
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Icon(Icons.video_file, size: 40),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      selectedFile!.name,
-                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                              Row(
+                                children: [
+                                  const Icon(Icons.video_library, size: 40),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${selectedFiles.length} video${selectedFiles.length > 1 ? 's' : ''} selected',
+                                          style: const TextStyle(fontWeight: FontWeight.bold),
+                                        ),
+                                        Text(
+                                          'Total size: ${_getTotalSizeFormatted()}',
+                                          style: TextStyle(
+                                            color: Theme.of(context).brightness == Brightness.dark
+                                                ? Colors.grey[400]
+                                                : Colors.grey,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    Text(
-                                      selectedFile!.sizeFormatted,
-                                      style: TextStyle(
-                                        color: Theme.of(context).brightness == Brightness.dark
-                                            ? Colors.grey[400]
-                                            : Colors.grey,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
+                              if (selectedFiles.length <= 3) ...[
+                                const SizedBox(height: 8),
+                                ...selectedFiles.map((file) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Text(
+                                    '• ${file.name}',
+                                    style: const TextStyle(fontSize: 12),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                )),
+                              ] else ...[
+                                const SizedBox(height: 8),
+                                ...selectedFiles.take(2).map((file) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Text(
+                                    '• ${file.name}',
+                                    style: const TextStyle(fontSize: 12),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                )),
+                                Text(
+                                  '• ... and ${selectedFiles.length - 2} more files',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontStyle: FontStyle.italic,
+                                    color: Theme.of(context).brightness == Brightness.dark
+                                        ? Colors.grey[400]
+                                        : Colors.grey,
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         )
                       else
-                        const Text('No file selected'),
+                        const Text('No files selected'),
                       const SizedBox(height: 16),
                       ElevatedButton.icon(
                         onPressed: _pickVideoFile,
@@ -410,7 +524,7 @@ class _ConverterScreenState extends ConsumerState<ConverterScreen> {
               const SizedBox(height: 16),
               
               // Conversion options (only show if file is selected)
-              if (selectedFile != null) ...[
+              if (selectedFiles.isNotEmpty) ...[
                 FormatSelector(
                   selectedFormat: selectedFormat,
                   onFormatChanged: (format) {
@@ -548,7 +662,7 @@ class _ConverterScreenState extends ConsumerState<ConverterScreen> {
                         child: OutlinedButton.icon(
                           onPressed: () {
                             setState(() {
-                              selectedFile = null;
+                              selectedFiles = [];
                               selectedFormat = 'mp4';
                               selectedQuality = 'Medium';
                               isConverting = false;

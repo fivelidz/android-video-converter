@@ -30,10 +30,16 @@ class MainActivity: FlutterActivity() {
     }
 
     private fun pickVideoFromGallery() {
-        val intent = Intent(Intent.ACTION_PICK, MediaStore.Video.Media.EXTERNAL_CONTENT_URI)
+        val intent = Intent(Intent.ACTION_GET_CONTENT)
         intent.type = "video/*"
+        intent.addCategory(Intent.CATEGORY_OPENABLE)
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
         intent.putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("video/mp4", "video/avi", "video/mov", "video/mkv", "video/webm"))
-        startActivityForResult(intent, VIDEO_PICK_REQUEST_CODE)
+        
+        // Try to open in Videos category
+        intent.putExtra("android.provider.extra.INITIAL_URI", MediaStore.Video.Media.EXTERNAL_CONTENT_URI)
+        
+        startActivityForResult(Intent.createChooser(intent, "Select Videos"), VIDEO_PICK_REQUEST_CODE)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -41,10 +47,28 @@ class MainActivity: FlutterActivity() {
         
         if (requestCode == VIDEO_PICK_REQUEST_CODE) {
             if (resultCode == Activity.RESULT_OK && data != null) {
-                val videoUri: Uri? = data.data
-                if (videoUri != null) {
-                    val realPath = getRealPathFromURI(videoUri)
-                    pendingResult?.success(realPath)
+                val videoPaths = mutableListOf<String>()
+                
+                if (data.clipData != null) {
+                    // Multiple files selected
+                    val clipData = data.clipData!!
+                    for (i in 0 until clipData.itemCount) {
+                        val uri = clipData.getItemAt(i).uri
+                        val path = getRealPathFromURI(uri)
+                        if (path != null) {
+                            videoPaths.add(path)
+                        }
+                    }
+                } else if (data.data != null) {
+                    // Single file selected
+                    val path = getRealPathFromURI(data.data!!)
+                    if (path != null) {
+                        videoPaths.add(path)
+                    }
+                }
+                
+                if (videoPaths.isNotEmpty()) {
+                    pendingResult?.success(videoPaths)
                 } else {
                     pendingResult?.error("NO_VIDEO", "No video selected", null)
                 }
