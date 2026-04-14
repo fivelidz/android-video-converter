@@ -55,7 +55,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _saveAccentColor(Color? color) async {
     final prefs = await SharedPreferences.getInstance();
     if (color != null) {
-      await prefs.setInt('accent_color', color.value);
+      await prefs.setInt('accent_color', color.toARGB32());
     } else {
       await prefs.remove('accent_color');
     }
@@ -263,7 +263,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         value: themeMode,
                         onChanged: (ThemeMode? newMode) {
                           if (newMode != null) {
-                            ref.read(themeProvider.notifier).state = newMode;
+                            ref.read(themeProvider.notifier).setTheme(newMode);
                           }
                         },
                         items: const [

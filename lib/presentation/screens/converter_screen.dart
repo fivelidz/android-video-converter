@@ -1034,7 +1034,37 @@ class _ConverterScreenState extends ConsumerState<ConverterScreen> with WidgetsB
                 
                 // Conversion progress or controls
                 if (isConverting)
-                  ConversionProgress(progress: conversionProgress)
+                  Column(
+                    children: [
+                      ConversionProgress(progress: conversionProgress),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              isConverting = false;
+                            });
+                          },
+                          icon: const Icon(Icons.stop_circle_outlined),
+                          label: const Text('Cancel Conversion'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 16,
+                            ),
+                            foregroundColor: Theme.of(context).colorScheme.error,
+                            side: BorderSide(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
                 else
                   Column(
                     children: [

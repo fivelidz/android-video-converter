@@ -489,7 +489,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         width: 60,
         height: 40,
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceVariant,
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(4),
         ),
         child: const Center(
@@ -705,18 +705,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               trailing: isSelectionMode 
                                 ? null
                                 : IconButton(
-                                    icon: const Icon(Icons.play_arrow),
+                                    icon: const Icon(Icons.open_in_new),
+                                    tooltip: 'Open file location',
                                     onPressed: () {
                                       if (!isSelectionMode) {
-                                        // Convert ConversionLogEntry to VideoFile for compatibility
-                                        final videoFile = VideoFile(
-                                          path: entry.convertedPath,
-                                          name: entry.fileName,
-                                          extension: entry.convertedFormat,
-                                          size: entry.convertedSize,
-                                          createdAt: entry.convertedAt,
-                                        );
-                                        context.go('/converter', extra: [videoFile]);
+                                        _openFileLocation(entry);
                                       }
                                     },
                                   ),

@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'dart:async';
 import '../models/video_file.dart';
+import 'conversion_log_service.dart';
 
 class FFmpegVideoConverterService {
   Function(double)? onProgress;
@@ -122,6 +123,17 @@ class FFmpegVideoConverterService {
         
         // Add small delay to ensure file system sync on Android
         await Future.delayed(Duration(milliseconds: 500));
+
+        // Log the successful conversion
+        await ConversionLogService.addConversionEntry(
+          originalPath: task.inputFile.path,
+          convertedPath: outputPath,
+          originalFormat: task.inputFile.extension.toLowerCase(),
+          convertedFormat: task.outputFormat.toLowerCase(),
+          quality: task.quality,
+          originalSize: task.inputFile.size,
+          convertedSize: outputSize,
+        );
         
         return outputPath;
       } else {

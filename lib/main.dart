@@ -10,7 +10,28 @@ import 'presentation/screens/license_screen.dart';
 import 'presentation/screens/privacy_policy_screen.dart';
 import 'data/models/video_file.dart';
 
-final themeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.system);
+// Persisted theme notifier
+class ThemeNotifier extends StateNotifier<ThemeMode> {
+  ThemeNotifier() : super(ThemeMode.system) {
+    _loadTheme();
+  }
+
+  Future<void> _loadTheme() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString('theme_mode');
+    if (saved == 'dark') state = ThemeMode.dark;
+    else if (saved == 'light') state = ThemeMode.light;
+    else state = ThemeMode.system;
+  }
+
+  Future<void> setTheme(ThemeMode mode) async {
+    state = mode;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('theme_mode', mode.name);
+  }
+}
+
+final themeProvider = StateNotifierProvider<ThemeNotifier, ThemeMode>((ref) => ThemeNotifier());
 
 // Predefined accent colors
 class AccentColors {
